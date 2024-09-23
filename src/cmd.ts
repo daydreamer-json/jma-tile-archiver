@@ -16,7 +16,7 @@ async function parseCommand() {
           'output-dir': {
             alias: ['o'],
             desc: 'Output root directory',
-            default: path.resolve(path.join('.', 'output')),
+            default: path.resolve(appConfig.file.outputDir),
             normalize: true,
             type: 'string',
           },

@@ -12,19 +12,73 @@ import waitUtils from './waitUtils.js';
 import mapTileCoordTransformUtils from './mapTileCoordTransformUtils.js';
 import tarballUtils from './tarballUtils.js';
 import writerUtils from './writerUtils.js';
+import jmaApiUtils from './jmaApiUtils.js';
+import imageUtils from './imageUtils.js';
 import { AxiosResponseHeaders } from 'axios';
+import databaseUtils from './databaseUtils.js';
 
-async function bgTileDownload(
-  zoomLevel: number,
-  mapTileTypeKey: 'std' | 'pale' | 'blank' | 'seamlessphoto' | 'jma_mask',
+// type jmaApiRspValid = {
+//   hrpns_past:
+// }
+
+async function batchDownload() {
+  const jmaApiRsp = await jmaApiUtils.fetchAllApiData();
+  if (jmaApiRsp.jmatile_nowc_dataStatus.dataStatus !== 'Normal') {
+    logger.warn('JMA data status is not Normal:', jmaApiRsp.jmatile_nowc_dataStatus);
+  } else {
+    logger.debug('JMA data status:', jmaApiRsp.jmatile_nowc_dataStatus);
+  }
+  const jmaApiRspValid = {
+    hrpns_past: jmaApiRsp.jmatile_nowc_targetTimes_n1,
+    hrpns_future: jmaApiRsp.jmatile_nowc_targetTimes_n2,
+    rasrf_past: jmaApiRsp.jmatile_rasrf_targetTimes.filter((obj) => {
+      if (obj.member === 'none' && obj.elements.includes('slmcs')) return true;
+    }),
+    rasrf_future: jmaApiRsp.jmatile_rasrf_targetTimes.filter((obj) => {
+      if (obj.member === 'none' && !obj.elements.includes('slmcs')) return true;
+    }),
+    rasrf03h_past: jmaApiRsp.jmatile_rasrf_targetTimes.filter((obj) => {
+      if (obj.member === 'none' && obj.elements.includes('slmcs') && obj.elements.includes('rasrf03h')) return true;
+    }),
+    rasrf24h_past: jmaApiRsp.jmatile_rasrf_targetTimes.filter((obj) => {
+      if (obj.member === 'none' && obj.elements.includes('slmcs') && obj.elements.includes('rasrf03h')) return true;
+    }),
+  };
+  const needDLEntry = databaseUtils.getNeedDLEntry(jmaApiRspValid);
+  for (const targetTimeObj of needDLEntry.hrpns_past) {
+    await singleTimeDL(targetTimeObj.basetime, 'hrpns', 10);
+  }
+  for (const targetTimeObj of needDLEntry.rasrf_past) {
+    await singleTimeDL(targetTimeObj.basetime, 'rasrf', 10);
+  }
+  for (const targetTimeObj of needDLEntry.rasrf03h_past) {
+    await singleTimeDL(targetTimeObj.basetime, 'rasrf03h', 10);
+  }
+  for (const targetTimeObj of needDLEntry.rasrf24h_past) {
+    await singleTimeDL(targetTimeObj.basetime, 'rasrf24h', 10);
+  }
+  databaseUtils.updateDbFromNeedDLEntry(needDLEntry);
+}
+
+async function singleTimeDL(
+  dtobj: DateTime,
+  mapTileType: 'hrpns' | 'rasrf' | 'rasrf03h' | 'rasrf24h',
+  zoomLevel: number = 10,
 ) {
-  const gsiTileFileExtension = (() => {
-    if (mapTileTypeKey === 'seamlessphoto') {
-      return 'jpg';
-    } else {
-      return 'png';
-    }
-  })();
+  const baseUrl =
+    appConfig.network.jmaApi.baseDomain +
+    appConfig.network.jmaApi.apiPath +
+    '/jmatile/data/' +
+    (() => {
+      if (mapTileType.includes('rasrf')) {
+        return 'rasrf';
+      } else {
+        return 'nowc';
+      }
+    })() +
+    `/${dtobj.setZone('UTC').toFormat('yyyyMMddHHmmss')}/none` +
+    `/${dtobj.setZone('UTC').toFormat('yyyyMMddHHmmss')}` +
+    `/surf/${mapTileType}`;
   const configCoordCalcRsp = {
     tl: mapTileCoordTransformUtils.lonLatToCoord(
       appConfig.mapTile.fetchPolygonCoord.tl.lon,
@@ -60,7 +114,7 @@ async function bgTileDownload(
     needDlTileListChunked.push(needDlTileList.filter((obj) => obj.threadId === threadId));
   });
 
-  logger.info(`Base map tile downloading: ${mapTileTypeKey}, z=${zoomLevel} ...`);
+  logger.info(`JMA tile downloading: ${mapTileType}, z=${zoomLevel}, ${dtobj.toISO()}`);
   const progressBar =
     argvUtils.getArgv().noShowProgress === false
       ? new cliProgress.MultiBar({
@@ -83,34 +137,18 @@ async function bgTileDownload(
         const subProgressBar = progressBar !== null ? progressBar.create(chunkArray.length, 0) : null;
         const tempRspArray: Array<singleTileRspObjIF> = new Array();
         for (const tileCoordObj of chunkArray) {
-          let builtUrl =
-            'https://' +
-            appConfig.network.mapTileApi.baseDomain +
-            appConfig.network.mapTileApi.apiPath +
-            `/${mapTileTypeKey}` +
-            `/${zoomLevel}` +
-            `/${tileCoordObj.x}` +
-            `/${tileCoordObj.y}` +
-            `.${gsiTileFileExtension}`;
-          if (mapTileTypeKey === 'jma_mask') {
-            builtUrl =
-              'https://' +
-              appConfig.network.jmaApi.baseDomain +
-              appConfig.network.jmaApi.apiPath +
-              `/jmatile/data/map/none/none/none/surf/mask` +
-              `/${zoomLevel}` +
-              `/${tileCoordObj.x}` +
-              `/${tileCoordObj.y}` +
-              `.${gsiTileFileExtension}`;
-          }
+          let builtUrl = 'https://' + baseUrl + `/${zoomLevel}` + `/${tileCoordObj.x}` + `/${tileCoordObj.y}` + `.png`;
           try {
-            tempRspArray.push({
+            const tmpRsp = {
               threadId: tileCoordObj.threadId,
               x: tileCoordObj.x,
               y: tileCoordObj.y,
               data: await apiConnect.apiConnectBinary(builtUrl, {}, {}),
               rspHeader: await apiConnect.apiHeadConnect(builtUrl, {}, {}),
-            });
+            };
+            if ((await imageUtils.isImageAllAlpha(tmpRsp.data)) === false) {
+              tempRspArray.push(tmpRsp);
+            }
             subProgressBar !== null ? subProgressBar.increment(1) : null;
           } catch (error: any) {
             if (
@@ -121,7 +159,7 @@ async function bgTileDownload(
               subProgressBar !== null ? subProgressBar.increment(1) : null;
               subProgressBar === null
                 ? logger.warn(
-                    `Tile not found. Skipped: ${mapTileTypeKey}, z=${zoomLevel}, x=${tileCoordObj.x}, y=${tileCoordObj.y}`,
+                    `Tile not found. Skipped: ${mapTileType}, z=${zoomLevel}, x=${tileCoordObj.x}, y=${tileCoordObj.y}`,
                   )
                 : null;
             } else {
@@ -146,19 +184,24 @@ async function bgTileDownload(
     return a.x - b.x;
   });
   progressBar !== null ? progressBar.stop() : null;
-  logger.info(`Base map tile download completed: ${mapTileTypeKey}, z=${zoomLevel}`);
   argvUtils.getArgv().benchmark === false
     ? await (async () => {
         const tarBufRsp = await tarballUtils.createTarFile(
           chunkResultArray.map((obj) => ({
-            path: `${obj.x}/${obj.y}.${gsiTileFileExtension}`,
+            path: `${obj.x}/${obj.y}.png`,
             data: obj.data,
             modifiedTime: DateTime.fromHTTP(obj.rspHeader['last-modified']).toJSDate(),
           })),
         );
         await writerUtils.writeZstdData(
           tarBufRsp,
-          path.join(argvUtils.getArgv().outputDir, 'gsi', `${mapTileTypeKey}_z${('0' + zoomLevel).slice(-2)}.tar.zst`),
+          path.join(
+            argvUtils.getArgv().outputDir,
+            'jma',
+            mapTileType,
+            dtobj.toFormat('yyyyMMdd'),
+            `${dtobj.toFormat('yyyyMMdd_HHmmss')}_z${('0' + zoomLevel).slice(-2)}.tar.zst`,
+          ),
           16,
         );
       })()
@@ -166,5 +209,6 @@ async function bgTileDownload(
 }
 
 export default {
-  bgTileDownload,
+  batchDownload,
+  singleTimeDL,
 };

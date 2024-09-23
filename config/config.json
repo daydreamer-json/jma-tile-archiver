@@ -1,4 +1,7 @@
 {
+  "file": {
+    "outputDir": "D:\\Applications\\GitHub\\Repository_HuggingFace\\jma-tile-archive-data\\output"
+  },
   "mapTile": {
     "fetchPolygonCoord": {
       "tl": {
@@ -30,7 +33,7 @@
       "apiPath": "/xyz",
       "refererUrl": "cyberjapandata.gsi.go.jp"
     },
-    "jmaMapTileApi": {
+    "jmaApi": {
       "baseDomain": "www.jma.go.jp",
       "apiPath": "/bosai",
       "refererUrl": "www.jma.go.jp"

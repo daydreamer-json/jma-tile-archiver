@@ -5,7 +5,7 @@
   "main": "dist/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "npx tsc && prettier --write src\\**\\*",
+    "build": "prettier --write src\\**\\* && npx tsc",
     "build:watch": "npx tsc --watch"
   },
   "author": "daydreamer-json <atarakima1@icloud.com> (https://github.com/daydreamer-json)",
@@ -32,6 +32,7 @@
     "prompts": "^2.4.2",
     "qs": "^6.13.0",
     "semver": "^7.6.3",
+    "sharp": "^0.33.5",
     "simple-statistics": "^7.8.5",
     "tar-stream": "^3.1.7",
     "yaml": "^2.5.0",

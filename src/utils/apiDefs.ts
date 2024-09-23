@@ -2,6 +2,36 @@ import appConfig from './config.js';
 import argvUtils from './argv.js';
 
 const apiDefs = {
+  jmatile_nowc_dataStatus() {
+    return {
+      endpoint: `https://${appConfig.network.jmaApi.baseDomain}${appConfig.network.jmaApi.apiPath}/jmatile/data/nowc/dataStatus.json`,
+      params: {},
+    };
+  },
+  jmatile_nowc_targetTimes_n1() {
+    return {
+      endpoint: `https://${appConfig.network.jmaApi.baseDomain}${appConfig.network.jmaApi.apiPath}/jmatile/data/nowc/targetTimes_N1.json`,
+      params: {},
+    };
+  },
+  jmatile_nowc_targetTimes_n2() {
+    return {
+      endpoint: `https://${appConfig.network.jmaApi.baseDomain}${appConfig.network.jmaApi.apiPath}/jmatile/data/nowc/targetTimes_N2.json`,
+      params: {},
+    };
+  },
+  jmatile_nowc_targetTimes_n3() {
+    return {
+      endpoint: `https://${appConfig.network.jmaApi.baseDomain}${appConfig.network.jmaApi.apiPath}/jmatile/data/nowc/targetTimes_N3.json`,
+      params: {},
+    };
+  },
+  jmatile_rasrf_targetTimes() {
+    return {
+      endpoint: `https://${appConfig.network.jmaApi.baseDomain}${appConfig.network.jmaApi.apiPath}/jmatile/data/rasrf/targetTimes.json`,
+      params: {},
+    };
+  },
   // html_artwork (id) {
   //   return {
   //     endpoint: `https://${appConfig.network.api.baseDomain}/artworks/${id}`,
@@ -125,7 +155,7 @@ const apiDefs = {
 const defaultApiConnectionHeader = {
   'User-Agent': appConfig.network.userAgent.chromeWindows,
   // 'Content-Type': 'application/json',
-  Referer: 'https://' + appConfig.network.api.refererUrl,
+  // Referer: 'https://' + appConfig.network.api.refererUrl,
   'Cache-Control': 'no-cache',
 };
 

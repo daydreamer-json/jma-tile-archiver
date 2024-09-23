@@ -9,6 +9,9 @@ type AllRequired<T> = Required<{
 
 type ConfigType = AllRequired<
   Freeze<{
+    file: {
+      outputDir: string;
+    };
     mapTile: {
       fetchPolygonCoord: {
         tl: {
@@ -40,7 +43,7 @@ type ConfigType = AllRequired<
         apiPath: string;
         refererUrl: string;
       };
-      jmaMapTileApi: {
+      jmaApi: {
         baseDomain: string;
         apiPath: string;
         refererUrl: string;

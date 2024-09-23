@@ -8,8 +8,17 @@ import { encode as cborEncode, decode as cborDecode } from 'cbor2';
 import YAML from 'yaml';
 import { compress as zstdCompress, decompress as zstdDecompress } from '@mongodb-js/zstd';
 
+async function createDirectory(path: string) {
+  await fs.promises.mkdir(path, { recursive: true });
+}
+
+function getDirectoryStrFromPath(pathStr: string) {
+  return path.dirname(pathStr);
+}
+
 async function writeJsonData(data: object | Array<any>, path: string, isMinify: boolean = true) {
   logger.debug('Writing JSON data to file:', path);
+  await createDirectory(getDirectoryStrFromPath(path));
   await fs.promises.writeFile(path, isMinify ? JSON.stringify(data) : JSON.stringify(data, null, '  '), {
     flag: 'w',
     encoding: 'utf8',
@@ -18,16 +27,19 @@ async function writeJsonData(data: object | Array<any>, path: string, isMinify: 
 
 async function writeCborData(data: object | Array<any>, path: string) {
   logger.debug('Writing CBOR data to file:', path);
+  await createDirectory(getDirectoryStrFromPath(path));
   await fs.promises.writeFile(path, cborEncode(data), { flag: 'w', encoding: 'binary' });
 }
 
 async function writeYamlData(data: object | Array<any>, path: string) {
   logger.debug('Writing YAML data to file:', path);
+  await createDirectory(getDirectoryStrFromPath(path));
   await fs.promises.writeFile(path, YAML.stringify(data), { flag: 'w', encoding: 'utf8' });
 }
 
 async function writeZstdData(data: Buffer, path: string, compressionLevel: number = 16) {
   logger.debug('Writing ZStd data to file:', path);
+  await createDirectory(getDirectoryStrFromPath(path));
   await fs.promises.writeFile(path, await zstdCompress(data, compressionLevel), { flag: 'w', encoding: 'binary' });
 }
 
@@ -48,6 +60,7 @@ async function writeJsonlData(data: Array<any>, path: string) {
       progressBar !== null ? progressBar.increment(1) : null;
     });
     progressBar !== null ? progressBar.stop() : null;
+    await createDirectory(getDirectoryStrFromPath(path));
     await fs.promises.writeFile(path, outputTextArray.join('\n'), { flag: 'w', encoding: 'utf8' });
   } else {
     throw new Error('Data is not an array');

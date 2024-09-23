@@ -8,29 +8,7 @@ import logger from './logger.js';
 import argvUtils from './argv.js';
 import waitUtils from './waitUtils.js';
 
-async function createTarFileOLD(
-  outputPath: string,
-  fileBufArray: Array<{ path: string; data: Buffer | ArrayBuffer; modifiedTime: Date | null }>,
-) {
-  const tarPack = tar.pack();
-  const chunks = new Array();
-  for (const file of fileBufArray) {
-    tarPack.entry(
-      { name: file.path, mtime: file.modifiedTime === null ? new Date() : file.modifiedTime },
-      Buffer.from(file.data),
-    );
-  }
-  tarPack.finalize();
-  for await (const chunk of tarPack) {
-    chunks.push(chunk);
-  }
-  const tarBuf = Buffer.concat(chunks);
-  logger.trace('Finalized tarball buffer');
-  return tarBuf;
-}
-
 async function createTarFile(
-  outputPath: string,
   fileBufArray: Array<{ path: string; data: Buffer | ArrayBuffer; modifiedTime: Date | null }>,
 ) {
   const tarPack = tar.pack();
@@ -56,20 +34,43 @@ async function createTarFile(
   return Buffer.concat(chunks);
 }
 
+async function extractTarBuffer(buffer: Buffer) {
+  return new Promise((resolve, reject) => {
+    const extract = tar.extract();
+    const files: Array<{
+      data: Buffer;
+      header: tar.Headers;
+    }> = [];
+    extract.on('entry', (header, stream, next) => {
+      const chunks: Array<any> = [];
+      stream.on('data', (chunk) => chunks.push(chunk));
+      stream.on('end', () => {
+        files.push({
+          data: Buffer.concat(chunks),
+          header,
+        });
+        next();
+      });
+      stream.on('error', reject);
+    });
+    extract.on('finish', () => resolve(files));
+    extract.on('error', reject);
+    extract.end(buffer);
+  });
+}
+
 async function test() {
-  await fs.promises.writeFile(
-    'test.tar',
-    await createTarFile('test.tar', [
-      { path: 'a.bin', data: new ArrayBuffer(8), modifiedTime: null },
-      { path: 'b.bin', data: new ArrayBuffer(16), modifiedTime: null },
-      { path: 'x/c.bin', data: new ArrayBuffer(24), modifiedTime: null },
-      { path: 'x/d.bin', data: new ArrayBuffer(32), modifiedTime: null },
-    ]),
-    { encoding: 'binary' },
-  );
+  const tarBuf = await createTarFile([
+    { path: 'a.bin', data: new ArrayBuffer(8), modifiedTime: null },
+    { path: 'b.bin', data: new ArrayBuffer(16), modifiedTime: null },
+    { path: 'x/c.bin', data: new ArrayBuffer(24), modifiedTime: null },
+    { path: 'x/d.bin', data: new ArrayBuffer(32), modifiedTime: null },
+  ]);
+  console.log(await extractTarBuffer(tarBuf));
 }
 
 export default {
   createTarFile,
+  extractTarBuffer,
   test,
 };
